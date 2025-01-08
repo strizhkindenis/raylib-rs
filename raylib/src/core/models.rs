@@ -407,6 +407,28 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
             )
         }
     }
+    /// Vertex texcoords
+    #[inline]
+    #[must_use]
+    fn texcoords(&self) -> &[Vector2] {
+        unsafe {
+            std::slice::from_raw_parts(
+                self.as_ref().texcoords as *const Vector2,
+                self.as_ref().vertexCount as usize,
+            )
+        }
+    }
+    /// Vertex texcoords
+    #[inline]
+    #[must_use]
+    fn texcoords_mut(&mut self) -> &mut [Vector2] {
+        unsafe {
+            std::slice::from_raw_parts_mut(
+                self.as_mut().texcoords as *mut Vector2,
+                self.as_mut().vertexCount as usize,
+            )
+        }
+    }
     /// Vertex tangents (XYZW - 4 components per vertex) (shader-location = 4)
     #[inline]
     #[must_use]
