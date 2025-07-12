@@ -634,6 +634,88 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct MeshBuilder {
+    triangle_count: usize,
+    vertex_count: usize,
+    vertices: Vec<Vector3>,
+    normals: Vec<Vector3>,
+    texcoords: Vec<Vector2>,
+    indices: Vec<u16>,
+}
+
+impl MeshBuilder {
+    pub fn topology(mut self, triangle_count: usize, vertex_count: usize) -> Self {
+        self.triangle_count = triangle_count;
+        self.vertex_count = vertex_count;
+        self
+    }
+
+    pub fn vertices(mut self, vertices: Vec<Vector3>) -> Self {
+        self.vertices = vertices;
+        self
+    }
+
+    pub fn normals(mut self, normals: Vec<Vector3>) -> Self {
+        self.normals = normals;
+        self
+    }
+
+    pub fn texcoords(mut self, texcoords: Vec<Vector2>) -> Self {
+        self.texcoords = texcoords;
+        self
+    }
+
+    pub fn indices(mut self, indices: Vec<u16>) -> Self {
+        self.indices = indices;
+        self
+    }
+
+    pub fn build(self, _: &RaylibThread) -> Mesh {
+        unsafe {
+            let c_vertices =
+                ffi::MemAlloc((size_of::<[f32; 3]>() * self.vertex_count) as u32).cast();
+            std::ptr::copy_nonoverlapping(
+                self.vertices.as_ptr() as *const f32,
+                c_vertices,
+                self.vertex_count * 3,
+            );
+            let c_normals =
+                ffi::MemAlloc((size_of::<[f32; 3]>() * self.vertex_count) as u32).cast();
+            std::ptr::copy_nonoverlapping(
+                self.normals.as_ptr() as *const f32,
+                c_normals,
+                self.vertex_count * 3,
+            );
+            let c_texcoords =
+                ffi::MemAlloc((size_of::<[f32; 2]>() * self.vertex_count) as u32).cast();
+            std::ptr::copy_nonoverlapping(
+                self.texcoords.as_ptr() as *const f32,
+                c_texcoords,
+                self.vertex_count * 2,
+            );
+            let c_indices = ffi::MemAlloc((size_of::<u16>() * self.vertex_count) as u32).cast();
+            std::ptr::copy_nonoverlapping(
+                self.indices.as_ptr() as *const u16,
+                c_indices,
+                self.indices.len(),
+            );
+            let zeroed = std::mem::MaybeUninit::zeroed().assume_init();
+            let mut mesh = Mesh::from_raw(ffi::Mesh {
+                vertexCount: self.vertex_count as i32,
+                triangleCount: self.triangle_count as i32,
+                vertices: c_vertices,
+                normals: c_normals,
+                texcoords: c_texcoords,
+                indices: c_indices,
+                ..zeroed
+            });
+            mesh.upload(false);
+            mesh
+        }
+    }
+}
+
 impl Material {
     #[must_use]
     #[inline]
