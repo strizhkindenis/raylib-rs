@@ -79,6 +79,7 @@ fn gen_block_mesh(thread: &RaylibThread) -> Mesh {
         .normals(normals)
         .texcoords(texcoords)
         .build(thread)
+        .unwrap()
 }
 
 fn update_rot(rot: &mut Vector3, dt: f32) {
