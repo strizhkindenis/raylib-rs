@@ -155,7 +155,7 @@ fn gen_block_mesh(thread: &RaylibThread) -> Mesh {
         })
         .collect();
     MeshBuilder::default()
-        .topology(triangle_count * 3, triangle_count)
+        .topology(triangle_count, triangle_count * 3)
         .vertices(vertices)
         .normals(normals)
         .texcoords(texcoords)

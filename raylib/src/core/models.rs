@@ -7,6 +7,7 @@ use crate::core::math::Transform;
 use crate::core::math::{Vector2, Vector3};
 use crate::core::texture::Image;
 use crate::core::{RaylibHandle, RaylibThread};
+use crate::data::DataBuf;
 use crate::ffi::Color;
 use crate::{
     consts,
@@ -672,34 +673,54 @@ impl MeshBuilder {
     }
 
     pub fn build(self, _: &RaylibThread) -> Mesh {
+        assert_eq!(self.vertices.len(), self.vertex_count);
+        assert_eq!(self.normals.len(), self.vertex_count);
+        assert_eq!(self.texcoords.len(), self.vertex_count);
         unsafe {
-            let c_vertices =
-                ffi::MemAlloc((size_of::<[f32; 3]>() * self.vertex_count) as u32).cast();
-            std::ptr::copy_nonoverlapping(
-                self.vertices.as_ptr() as *const f32,
-                c_vertices,
-                self.vertex_count * 3,
-            );
-            let c_normals =
-                ffi::MemAlloc((size_of::<[f32; 3]>() * self.vertex_count) as u32).cast();
-            std::ptr::copy_nonoverlapping(
-                self.normals.as_ptr() as *const f32,
-                c_normals,
-                self.vertex_count * 3,
-            );
-            let c_texcoords =
-                ffi::MemAlloc((size_of::<[f32; 2]>() * self.vertex_count) as u32).cast();
-            std::ptr::copy_nonoverlapping(
-                self.texcoords.as_ptr() as *const f32,
-                c_texcoords,
-                self.vertex_count * 2,
-            );
-            let c_indices = ffi::MemAlloc((size_of::<u16>() * self.vertex_count) as u32).cast();
-            std::ptr::copy_nonoverlapping(
-                self.indices.as_ptr() as *const u16,
-                c_indices,
-                self.indices.len(),
-            );
+            let c_vertices = match DataBuf::<[f32; 3]>::alloc(self.vertices.len() as i32) {
+                Ok(mut buf) => {
+                    std::ptr::copy_nonoverlapping(
+                        self.vertices.as_ptr() as *const [f32; 3],
+                        buf.as_mut_ptr(),
+                        self.vertices.len(),
+                    );
+                    buf.leak().0.as_ptr().cast()
+                }
+                Err(_) => std::ptr::null_mut(),
+            };
+            let c_normals = match DataBuf::<[f32; 3]>::alloc(self.normals.len() as i32) {
+                Ok(mut buf) => {
+                    std::ptr::copy_nonoverlapping(
+                        self.normals.as_ptr() as *const [f32; 3],
+                        buf.as_mut_ptr(),
+                        self.normals.len(),
+                    );
+                    buf.leak().0.as_ptr().cast()
+                }
+                Err(_) => std::ptr::null_mut(),
+            };
+            let c_texcoords = match DataBuf::<[f32; 2]>::alloc(self.texcoords.len() as i32) {
+                Ok(mut buf) => {
+                    std::ptr::copy_nonoverlapping(
+                        self.texcoords.as_ptr() as *const [f32; 2],
+                        buf.as_mut_ptr(),
+                        self.texcoords.len(),
+                    );
+                    buf.leak().0.as_ptr().cast()
+                }
+                Err(_) => std::ptr::null_mut(),
+            };
+            let c_indices = match DataBuf::<u16>::alloc(self.indices.len() as i32) {
+                Ok(mut buf) => {
+                    std::ptr::copy_nonoverlapping(
+                        self.indices.as_ptr() as *const u16,
+                        buf.as_mut_ptr(),
+                        self.indices.len(),
+                    );
+                    buf.leak().0.as_ptr().cast()
+                }
+                Err(_) => std::ptr::null_mut(),
+            };
             let zeroed = std::mem::MaybeUninit::zeroed().assume_init();
             let mut mesh = Mesh::from_raw(ffi::Mesh {
                 vertexCount: self.vertex_count as i32,
