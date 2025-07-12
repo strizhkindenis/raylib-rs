@@ -14,142 +14,61 @@ fn gen_block_mesh(thread: &RaylibThread) -> Mesh {
             y as f32 * TILE_WIDTH as f32 / TILEMAP_HEIGHT as f32,
         )
     };
-    let front_face = (
-        [
-            [-half, -half, half],
-            [half, -half, half],
-            [-half, half, half],
-            [-half, half, half],
-            [half, -half, half],
-            [half, half, half],
-        ],
-        [
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0],
-        ],
-        [[1, 1], [2, 1], [1, 0], [1, 0], [2, 1], [2, 0]],
-    );
-    let right_face = (
-        [
-            [half, -half, half],
-            [half, -half, -half],
-            [half, half, half],
-            [half, half, half],
-            [half, -half, -half],
-            [half, half, -half],
-        ],
-        [
-            [1.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-        ],
-        [[1, 1], [2, 1], [1, 0], [1, 0], [2, 1], [2, 0]],
-    );
-    let back_face = (
-        [
-            [half, -half, -half],
-            [-half, -half, -half],
-            [half, half, -half],
-            [half, half, -half],
-            [-half, -half, -half],
-            [-half, half, -half],
-        ],
-        [
-            [0.0, 0.0, -1.0],
-            [0.0, 0.0, -1.0],
-            [0.0, 0.0, -1.0],
-            [0.0, 0.0, -1.0],
-            [0.0, 0.0, -1.0],
-            [0.0, 0.0, -1.0],
-        ],
-        [[1, 1], [2, 1], [1, 0], [1, 0], [2, 1], [2, 0]],
-    );
-    let left_face = (
-        [
-            [-half, -half, -half],
-            [-half, -half, half],
-            [-half, half, -half],
-            [-half, half, -half],
-            [-half, -half, half],
-            [-half, half, half],
-        ],
-        [
-            [-1.0, 0.0, 0.0],
-            [-1.0, 0.0, 0.0],
-            [-1.0, 0.0, 0.0],
-            [-1.0, 0.0, 0.0],
-            [-1.0, 0.0, 0.0],
-            [-1.0, 0.0, 0.0],
-        ],
-        [[1, 1], [2, 1], [1, 0], [1, 0], [2, 1], [2, 0]],
-    );
-    let top_face = (
-        [
-            [-half, half, -half],
-            [-half, half, half],
-            [half, half, -half],
-            [half, half, -half],
-            [-half, half, half],
-            [half, half, half],
-        ],
-        [
-            [0.0, 1.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ],
-        [[2, 1], [2, 0], [3, 1], [3, 1], [2, 0], [3, 0]],
-    );
-    let bottom_face = (
-        [
-            [-half, -half, -half],
-            [half, -half, -half],
-            [-half, -half, half],
-            [-half, -half, half],
-            [half, -half, -half],
-            [half, -half, half],
-        ],
-        [
-            [0.0, -1.0, 0.0],
-            [0.0, -1.0, 0.0],
-            [0.0, -1.0, 0.0],
-            [0.0, -1.0, 0.0],
-            [0.0, -1.0, 0.0],
-            [0.0, -1.0, 0.0],
-        ],
-        [[0, 1], [1, 1], [0, 0], [0, 0], [1, 1], [1, 0]],
-    );
     let faces = [
-        &front_face,
-        &back_face,
-        &left_face,
-        &right_face,
-        &bottom_face,
-        &top_face,
+        // front
+        ([-half, -half, half], [0.0, 0.0, 1.0], [1, 1]),
+        ([half, -half, half], [0.0, 0.0, 1.0], [2, 1]),
+        ([-half, half, half], [0.0, 0.0, 1.0], [1, 0]),
+        ([-half, half, half], [0.0, 0.0, 1.0], [1, 0]),
+        ([half, -half, half], [0.0, 0.0, 1.0], [2, 1]),
+        ([half, half, half], [0.0, 0.0, 1.0], [2, 0]),
+        // right
+        ([half, -half, half], [1.0, 0.0, 0.0], [1, 1]),
+        ([half, -half, -half], [1.0, 0.0, 0.0], [2, 1]),
+        ([half, half, half], [1.0, 0.0, 0.0], [1, 0]),
+        ([half, half, half], [1.0, 0.0, 0.0], [1, 0]),
+        ([half, -half, -half], [1.0, 0.0, 0.0], [2, 1]),
+        ([half, half, -half], [1.0, 0.0, 0.0], [2, 0]),
+        // back
+        ([half, -half, -half], [0.0, 0.0, -1.0], [1, 1]),
+        ([-half, -half, -half], [0.0, 0.0, -1.0], [2, 1]),
+        ([half, half, -half], [0.0, 0.0, -1.0], [1, 0]),
+        ([half, half, -half], [0.0, 0.0, -1.0], [1, 0]),
+        ([-half, -half, -half], [0.0, 0.0, -1.0], [2, 1]),
+        ([-half, half, -half], [0.0, 0.0, -1.0], [2, 0]),
+        // left
+        ([-half, -half, -half], [-1.0, 0.0, 0.0], [1, 1]),
+        ([-half, -half, half], [-1.0, 0.0, 0.0], [2, 1]),
+        ([-half, half, -half], [-1.0, 0.0, 0.0], [1, 0]),
+        ([-half, half, -half], [-1.0, 0.0, 0.0], [1, 0]),
+        ([-half, -half, half], [-1.0, 0.0, 0.0], [2, 1]),
+        ([-half, half, half], [-1.0, 0.0, 0.0], [2, 0]),
+        // top
+        ([-half, half, -half], [0.0, 1.0, 0.0], [2, 1]),
+        ([-half, half, half], [0.0, 1.0, 0.0], [2, 0]),
+        ([half, half, -half], [0.0, 1.0, 0.0], [3, 1]),
+        ([half, half, -half], [0.0, 1.0, 0.0], [3, 1]),
+        ([-half, half, half], [0.0, 1.0, 0.0], [2, 0]),
+        ([half, half, half], [0.0, 1.0, 0.0], [3, 0]),
+        // bottom
+        ([-half, -half, -half], [0.0, -1.0, 0.0], [0, 1]),
+        ([half, -half, -half], [0.0, -1.0, 0.0], [1, 1]),
+        ([-half, -half, half], [0.0, -1.0, 0.0], [0, 0]),
+        ([-half, -half, half], [0.0, -1.0, 0.0], [0, 0]),
+        ([half, -half, -half], [0.0, -1.0, 0.0], [1, 1]),
+        ([half, -half, half], [0.0, -1.0, 0.0], [1, 0]),
     ];
     let vertices = faces
         .iter()
-        .flat_map(|(vertices, _, _)| vertices)
-        .map(|v| Vector3::new(v[0], v[1], v[2]))
+        .map(|(v, _, _)| Vector3::new(v[0], v[1], v[2]))
         .collect();
     let normals = faces
         .iter()
-        .flat_map(|(_, normals, _)| normals)
-        .map(|n| Vector3::new(n[0], n[1], n[2]))
+        .map(|(_, n, _)| Vector3::new(n[0], n[1], n[2]))
         .collect();
     let texcoords = faces
         .iter()
-        .flat_map(|(_, _, uvs)| uvs)
-        .map(|u| {
+        .map(|(_, _, u)| {
             let (x, y) = tilemap_pos_to_uv(u[0], u[1]);
             Vector2::new(x, y)
         })
