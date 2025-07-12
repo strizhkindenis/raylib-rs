@@ -4,7 +4,7 @@ use crate::MintVec3;
 use crate::core::math::BoundingBox;
 use crate::core::math::Matrix;
 use crate::core::math::Transform;
-use crate::core::math::Vector3;
+use crate::core::math::{Vector2, Vector3};
 use crate::core::texture::Image;
 use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi::Color;
@@ -407,7 +407,7 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
             )
         }
     }
-    /// Vertex texcoords
+    /// Vertex texture coordinates (UV - 2 components per vertex) (shader-location = 1)
     #[inline]
     #[must_use]
     fn texcoords(&self) -> &[Vector2] {
@@ -418,13 +418,35 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
             )
         }
     }
-    /// Vertex texcoords
+    /// Vertex texture coordinates (UV - 2 components per vertex) (shader-location = 1)
     #[inline]
     #[must_use]
     fn texcoords_mut(&mut self) -> &mut [Vector2] {
         unsafe {
             std::slice::from_raw_parts_mut(
                 self.as_mut().texcoords as *mut Vector2,
+                self.as_mut().vertexCount as usize,
+            )
+        }
+    }
+    /// Vertex texture second coordinates (UV - 2 components per vertex) (shader-location = 5)
+    #[inline]
+    #[must_use]
+    fn texcoords2(&self) -> &[Vector2] {
+        unsafe {
+            std::slice::from_raw_parts(
+                self.as_ref().texcoords2 as *const Vector2,
+                self.as_ref().vertexCount as usize,
+            )
+        }
+    }
+    /// Vertex texture second coordinates (UV - 2 components per vertex) (shader-location = 5)
+    #[inline]
+    #[must_use]
+    fn texcoords2_mut(&mut self) -> &mut [Vector2] {
+        unsafe {
+            std::slice::from_raw_parts_mut(
+                self.as_mut().texcoords2 as *mut Vector2,
                 self.as_mut().vertexCount as usize,
             )
         }
