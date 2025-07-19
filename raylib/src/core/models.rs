@@ -1033,17 +1033,6 @@ pub struct MeshBuilder<'a> {
     colors: Option<&'a [Color]>,
 }
 
-unsafe fn cast_databuf_option<T, U>(buf: Option<DataBuf<[T]>>) -> *mut U {
-    // Safety: you should be sure that [T] can actually be cast into U.
-    //   This function leaks DataBuf managed ptr in order to transfer
-    //   its managmenet to a raylib struct. Some raylib functions/structs
-    //   actually accept null_ptr for optional values, so it's ok to provide null_ptr.
-    match buf {
-        Some(buf) => buf.into_inner().into_inner().as_ptr().cast::<U>(),
-        None => std::ptr::null_mut(),
-    }
-}
-
 impl<'a> MeshBuilder<'a> {
     pub fn topology(&mut self, triangle_count: usize, vertex_count: usize) -> &mut Self {
         self.triangle_count = triangle_count;
@@ -1086,6 +1075,21 @@ impl<'a> MeshBuilder<'a> {
         self
     }
 
+    // Safety: internal use only! cast Vec3, Vec2 and so on into Mesh pointers
+    //   the pointers are leaked and will be managed by raylib. One should be sure
+    //   that [T] can actually be cast into U. Some raylib functions/structs
+    //   actually accept null_ptr for optional values, so it's ok to provide null_ptr.
+    fn slice_to_ptr<T: Copy, U>(data: Option<&'a [T]>) -> Result<*mut U, AllocationError> {
+        Ok(match data {
+            Some(data) => DataBuf::<[_]>::alloc_from_copy(data)?
+                .into_inner()
+                .into_inner()
+                .as_ptr()
+                .cast::<U>(),
+            None => std::ptr::null_mut(),
+        })
+    }
+
     pub fn build(&mut self, _: &RaylibThread) -> Result<Mesh, AllocationError> {
         assert_eq!(self.vertices.len(), self.vertex_count);
         assert_eq!(self.texcoords.len(), self.vertex_count);
@@ -1097,47 +1101,16 @@ impl<'a> MeshBuilder<'a> {
         );
         assert!(self.tangents.is_none_or(|x| x.len() == self.vertex_count));
         assert!(self.colors.is_none_or(|x| x.len() == self.vertex_count));
-        let c_vertices = DataBuf::<[_]>::alloc_from_copy(self.vertices)?;
-        let c_normals = self
-            .normals
-            .map(DataBuf::<[_]>::alloc_from_copy)
-            .transpose()?;
-        let c_texcoords = DataBuf::<[_]>::alloc_from_copy(self.texcoords)?;
-        let c_texcoords2 = self
-            .texcoords2
-            .map(DataBuf::<[_]>::alloc_from_copy)
-            .transpose()?;
-        let c_indices = self
-            .indices
-            .map(DataBuf::<[_]>::alloc_from_copy)
-            .transpose()?;
-        let c_tangents = self
-            .tangents
-            .map(DataBuf::<[_]>::alloc_from_copy)
-            .transpose()?;
-        let c_colors = self
-            .colors
-            .map(DataBuf::<[_]>::alloc_from_copy)
-            .transpose()?;
-        // Safety: cast Vec3, Vec2 and so on into Mesh pointers
-        //   the pointers are leaked and will be managed by raylib
-        let c_vertices = unsafe { cast_databuf_option(Some(c_vertices)) };
-        let c_normals = unsafe { cast_databuf_option(c_normals) };
-        let c_texcoords = unsafe { cast_databuf_option(Some(c_texcoords)) };
-        let c_texcoords2 = unsafe { cast_databuf_option(c_texcoords2) };
-        let c_indices = unsafe { cast_databuf_option(c_indices) };
-        let c_colors = unsafe { cast_databuf_option(c_colors) };
-        let c_tangents = unsafe { cast_databuf_option(c_tangents) };
         let mesh = ffi::Mesh {
             vertexCount: self.vertex_count.try_into().unwrap(),
             triangleCount: self.triangle_count.try_into().unwrap(),
-            vertices: c_vertices,
-            normals: c_normals,
-            texcoords: c_texcoords,
-            texcoords2: c_texcoords2,
-            indices: c_indices,
-            colors: c_colors,
-            tangents: c_tangents,
+            vertices: Self::slice_to_ptr(Some(self.vertices))?,
+            normals: Self::slice_to_ptr(self.normals)?,
+            texcoords: Self::slice_to_ptr(Some(self.texcoords))?,
+            texcoords2: Self::slice_to_ptr(self.texcoords2)?,
+            indices: Self::slice_to_ptr(self.indices)?,
+            colors: Self::slice_to_ptr(self.colors)?,
+            tangents: Self::slice_to_ptr(self.tangents)?,
             ..Default::default()
         };
         let mesh = unsafe {
