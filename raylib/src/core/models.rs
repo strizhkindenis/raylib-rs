@@ -1167,7 +1167,7 @@ impl<'a> MeshBuilder<'a> {
         self
     }
 
-    /// Give the mesh custom tangents colors.
+    /// Give the mesh custom vertex normals.
     ///
     /// NOTE: `normals` should have the same number of elements as `self.vertices`.
     #[inline]
