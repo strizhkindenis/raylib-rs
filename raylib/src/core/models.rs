@@ -5,7 +5,7 @@ use crate::core::databuf::DataBuf;
 use crate::core::math::BoundingBox;
 use crate::core::math::Matrix;
 use crate::core::math::Transform;
-use crate::core::math::{Vector2, Vector3};
+use crate::core::math::{Vector2, Vector3, Vector4};
 use crate::core::texture::Image;
 use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi::Color;
@@ -1020,104 +1020,246 @@ impl RaylibHandle {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone)]
+#[must_use]
 pub struct MeshBuilder<'a> {
+    /// Number of triangles stored (indexed or not)
     triangle_count: usize,
-    vertex_count: usize,
+    /// Vertex position (XYZ - 3 components per vertex)
     vertices: &'a [Vector3],
-    normals: Option<&'a [Vector3]>,
+    /// Vertex texture coordinates (UV - 2 components per vertex)
     texcoords: &'a [Vector2],
+    /// Vertex texture second coordinates (UV - 2 components per vertex)
     texcoords2: Option<&'a [Vector2]>,
-    indices: Option<&'a [u16]>,
-    tangents: Option<&'a [Vector3]>,
+    /// Vertex normals (XYZ - 3 components per vertex)
+    normals: Option<&'a [Vector3]>,
+    /// Vertex tangents (XYZW - 4 components per vertex)
+    tangents: Option<&'a [Vector4]>,
+    /// Vertex colors (RGBA - 4 components per vertex)
     colors: Option<&'a [Color]>,
+    /// Vertex indices (in case vertex data comes indexed)
+    indices: Option<&'a [u16]>,
+}
+
+impl Mesh {
+    /// Create a new [`MeshBuilder`] to begin generating a custom [`Mesh`].
+    ///
+    /// # Example
+    /// ```
+    /// # use raylib::prelude::*;
+    /// # let (mut rl, thread) = init().build();
+    /// let mesh = Mesh::gen_mesh(1, &[
+    ///     Vector3::new(0.0, 0.0, 0.0),
+    ///     Vector3::new(1.0, 0.0, 0.0),
+    ///     Vector3::new(1.0, 0.0, 1.0),
+    /// ], &[
+    ///     Vector2::new(0.0, 0.0),
+    ///     Vector2::new(1.0, 0.0),
+    ///     Vector2::new(1.0, 1.0),
+    /// ])
+    /// .normals(&[
+    ///     Vector3::new(0.0, 1.0, 0.0),
+    ///     Vector3::new(0.0, 1.0, 0.0),
+    ///     Vector3::new(0.0, 1.0, 0.0),
+    /// ])
+    /// .colors(&[
+    ///     Color::RED,
+    ///     Color::GREEN,
+    ///     Color::BLUE,
+    /// ])
+    /// .build(&thread);
+    /// ```
+    #[inline]
+    pub fn gen_mesh<'a>(
+        triangle_count: usize,
+        vertices: &'a [Vector3],
+        texcoords: &'a [Vector2],
+    ) -> MeshBuilder<'a> {
+        MeshBuilder::new(triangle_count, vertices, texcoords)
+    }
+}
+
+/// Allocate a Raylib-managed pointer to a copy of `[T]` cast to `U` for use in [`ffi::Mesh`].
+///
+/// This function is safe, but dereferencing the returned pointer may not be.
+/// The caller must ensure that `*mut [T]` is safe to dereference as `*mut U`.
+fn slice_to_rl_ptr<'a, T: Copy + 'a, U: 'a>(
+    data: Option<&'a [T]>,
+) -> Result<*mut U, AllocationError> {
+    Ok(match data {
+        Some(data) => {
+            // ok:  {AAAA} -> {AAAA}
+            // ok:  {AAAA} -> {AA}{AA}
+            // bad: {AAAA} -> {AAAA????}
+            assert!(
+                std::mem::size_of_val(data) >= std::mem::size_of::<U>(),
+                "should not cast to a larger type",
+            );
+            // ok:  {AAAA} -> {AAAA}
+            // ok:  {AAAA} -> {AA}{AA}
+            // bad: {AAAA} -> {AAA}{A??}
+            assert!(
+                (std::mem::size_of_val(data) % std::mem::size_of::<U>()) == 0,
+                "should not cast to a type whose size does not evenly divide the source",
+            );
+            // ok:  {AAAA|BBBB} -> {AA|AA|BB|BB}
+            // ok:  {AAAA|BBBB} -> {A|A|A|A|B|B|B|B}
+            // bad: {AAAA|BBBB} -> {AAAABBBB|????????}
+            assert!(
+                (std::mem::align_of::<T>() >= std::mem::align_of::<U>()),
+                "should not cast to a type with wider alignment than that of the source",
+            );
+            // ok:  {AAAA|BBBB} -> {AA|AA}{BB|BB}
+            // ok:  {AAAA|BBBB} -> {AA}{AA}{BB}{BB}
+            // bad: {AAAA|BBBB} -> {AAA|ABB}{BB?|???}
+            assert!(
+                (std::mem::align_of::<T>() % std::mem::align_of::<U>()) == 0,
+                "should not cast to a type whose alignment does not evenly divide the source alignment",
+            );
+            DataBuf::<[T]>::alloc_from_copy(data)?
+                .into_inner()
+                .into_inner()
+                .as_ptr()
+                .cast::<U>()
+        }
+        // Raylib accepts null for optional pointer values, so it's ok to provide `null_mut`.
+        None => std::ptr::null_mut(),
+    })
 }
 
 impl<'a> MeshBuilder<'a> {
-    pub fn topology(&mut self, triangle_count: usize, vertex_count: usize) -> &mut Self {
-        self.triangle_count = triangle_count;
-        self.vertex_count = vertex_count;
-        self
+    /// Construct a [`MeshBuilder`] from its required fields.
+    ///
+    /// NOTE: `texcoords` should have the same number of elements as `vertices`.
+    pub fn new(triangle_count: usize, vertices: &'a [Vector3], texcoords: &'a [Vector2]) -> Self {
+        assert_eq!(
+            texcoords.len(),
+            vertices.len(),
+            "mesh should have one texcoord per vertex",
+        );
+        Self {
+            triangle_count,
+            vertices,
+            texcoords,
+            texcoords2: None,
+            normals: None,
+            tangents: None,
+            colors: None,
+            indices: None,
+        }
     }
 
-    pub fn vertices(&mut self, vertices: &'a [Vector3]) -> &mut Self {
-        self.vertices = vertices;
-        self
-    }
-
-    pub fn normals(&mut self, normals: &'a [Vector3]) -> &mut Self {
-        self.normals = Some(normals);
-        self
-    }
-
-    pub fn texcoords(&mut self, texcoords: &'a [Vector2]) -> &mut Self {
-        self.texcoords = texcoords;
-        self
-    }
-
+    /// Give the mesh custom secondary texture coordinates.
+    ///
+    /// NOTE: `texcoords2` should have the same number of elements as `self.vertices`.
+    #[inline]
     pub fn texcoords2(&mut self, texcoords2: &'a [Vector2]) -> &mut Self {
+        assert!(
+            self.texcoords2.is_none(),
+            "texcoords2() should be called no more than once on the same MeshBuilder",
+        );
+        assert_eq!(
+            texcoords2.len(),
+            self.vertices.len(),
+            "mesh with texcoords2 should have one per vertex",
+        );
         self.texcoords2 = Some(texcoords2);
         self
     }
 
-    pub fn indices(&mut self, indices: &'a [u16]) -> &mut Self {
-        self.indices = Some(indices);
+    /// Give the mesh custom vertex normals.
+    ///
+    /// NOTE: `normals` should have the same number of elements as `self.vertices`.
+    #[inline]
+    pub fn normals(&mut self, normals: &'a [Vector3]) -> &mut Self {
+        assert!(
+            self.normals.is_none(),
+            "normals() should be called no more than once on the same MeshBuilder",
+        );
+        assert_eq!(
+            normals.len(),
+            self.vertices.len(),
+            "mesh with normals should have one per vertex",
+        );
+        self.normals = Some(normals);
         self
     }
 
-    pub fn tangents(&mut self, tangents: &'a [Vector3]) -> &mut Self {
+    /// Give the mesh custom tangent vectors.
+    ///
+    /// NOTE: `tangents` should have the same number of elements as `self.vertices`.
+    #[inline]
+    pub fn tangents(&mut self, tangents: &'a [Vector4]) -> &mut Self {
+        assert!(
+            self.tangents.is_none(),
+            "tangents() should be called no more than once on the same MeshBuilder",
+        );
+        assert_eq!(
+            tangents.len(),
+            self.vertices.len(),
+            "mesh with tangents should have one per vertex",
+        );
         self.tangents = Some(tangents);
         self
     }
 
+    /// Give the mesh custom vertex colors.
+    ///
+    /// NOTE: `colors` should have the same number of elements as `self.vertices`.
+    #[inline]
     pub fn colors(&mut self, colors: &'a [Color]) -> &mut Self {
+        assert!(
+            self.colors.is_none(),
+            "colors() should be called no more than once on the same MeshBuilder",
+        );
+        assert_eq!(
+            colors.len(),
+            self.vertices.len(),
+            "mesh with colors should have one per vertex",
+        );
         self.colors = Some(colors);
         self
     }
 
-    // Safety: internal use only! cast Vec3, Vec2 and so on into Mesh pointers
-    //   the pointers are leaked and will be managed by raylib. One should be sure
-    //   that [T] can actually be cast into U. Some raylib functions/structs
-    //   actually accept null_ptr for optional values, so it's ok to provide null_ptr.
-    fn slice_to_ptr<T: Copy, U>(data: Option<&'a [T]>) -> Result<*mut U, AllocationError> {
-        Ok(match data {
-            Some(data) => DataBuf::<[_]>::alloc_from_copy(data)?
-                .into_inner()
-                .into_inner()
-                .as_ptr()
-                .cast::<U>(),
-            None => std::ptr::null_mut(),
-        })
+    /// Give the mesh custom triangle indices.
+    ///
+    /// NOTE: `indices` should have 3x as many elements as `self.triangle_count`.
+    #[inline]
+    pub fn indices(&mut self, indices: &'a [u16]) -> &mut Self {
+        assert!(
+            self.indices.is_none(),
+            "indices() should be called no more than once on the same MeshBuilder",
+        );
+        assert_eq!(
+            indices.len(),
+            self.triangle_count * 3,
+            "mesh with indices should have 3 for each triangle",
+        );
+        self.indices = Some(indices);
+        self
     }
 
-    pub fn build(&mut self, _: &RaylibThread) -> Result<Mesh, AllocationError> {
-        assert_eq!(self.vertices.len(), self.vertex_count);
-        assert_eq!(self.texcoords.len(), self.vertex_count);
-        assert!(self.normals.is_none_or(|x| x.len() == self.vertex_count));
-        assert!(self.texcoords2.is_none_or(|x| x.len() == self.vertex_count));
-        assert!(
-            self.indices
-                .is_none_or(|x| x.len() == self.triangle_count * 3)
-        );
-        assert!(self.tangents.is_none_or(|x| x.len() == self.vertex_count));
-        assert!(self.colors.is_none_or(|x| x.len() == self.vertex_count));
-        let mesh = ffi::Mesh {
-            vertexCount: self.vertex_count.try_into().unwrap(),
+    /// Complete and upload the [`Mesh`].
+    pub fn build(&self, _thread: &RaylibThread) -> Result<Mesh, AllocationError> {
+        let raw_mesh = ffi::Mesh {
+            vertexCount: self.vertices.len().try_into().unwrap(),
             triangleCount: self.triangle_count.try_into().unwrap(),
-            vertices: Self::slice_to_ptr(Some(self.vertices))?,
-            normals: Self::slice_to_ptr(self.normals)?,
-            texcoords: Self::slice_to_ptr(Some(self.texcoords))?,
-            texcoords2: Self::slice_to_ptr(self.texcoords2)?,
-            indices: Self::slice_to_ptr(self.indices)?,
-            colors: Self::slice_to_ptr(self.colors)?,
-            tangents: Self::slice_to_ptr(self.tangents)?,
+            vertices: slice_to_rl_ptr(Some(self.vertices))?,
+            texcoords: slice_to_rl_ptr(Some(self.texcoords))?,
+            texcoords2: slice_to_rl_ptr(self.texcoords2)?,
+            normals: slice_to_rl_ptr(self.normals)?,
+            tangents: slice_to_rl_ptr(self.tangents)?,
+            colors: slice_to_rl_ptr(self.colors)?,
+            indices: slice_to_rl_ptr(self.indices)?,
             ..Default::default()
         };
-        let mesh = unsafe {
-            let mut mesh = Mesh::from_raw(mesh);
+        // SAFETY: Borrowing `RaylibThread` guarantees this is the thread the resourece was created from,
+        // and raw_mesh has no duplicates because it was just created.
+        let mut mesh = unsafe { Mesh::from_raw(raw_mesh) };
+        // SAFETY: mesh.vertices and mesh.texcoords are valid, initialized, unique, and safe to dereference.
+        unsafe {
             mesh.upload(false);
-            mesh
-        };
+        }
         Ok(mesh)
     }
 }
