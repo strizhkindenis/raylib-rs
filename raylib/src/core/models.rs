@@ -1023,8 +1023,6 @@ impl RaylibHandle {
 #[derive(Debug, Clone)]
 #[must_use]
 pub struct MeshBuilder<'a> {
-    /// Number of triangles stored (indexed or not)
-    triangle_count: usize,
     /// Vertex position (XYZ - 3 components per vertex)
     vertices: &'a [Vector3],
     /// Vertex texture coordinates (UV - 2 components per vertex)
@@ -1070,12 +1068,8 @@ impl Mesh {
     /// .build(&thread);
     /// ```
     #[inline]
-    pub fn gen_mesh<'a>(
-        triangle_count: usize,
-        vertices: &'a [Vector3],
-        texcoords: &'a [Vector2],
-    ) -> MeshBuilder<'a> {
-        MeshBuilder::new(triangle_count, vertices, texcoords)
+    pub fn gen_mesh<'a>(vertices: &'a [Vector3], texcoords: &'a [Vector2]) -> MeshBuilder<'a> {
+        MeshBuilder::new(vertices, texcoords)
     }
 }
 
@@ -1131,14 +1125,13 @@ impl<'a> MeshBuilder<'a> {
     /// Construct a [`MeshBuilder`] from its required fields.
     ///
     /// NOTE: `texcoords` should have the same number of elements as `vertices`.
-    pub fn new(triangle_count: usize, vertices: &'a [Vector3], texcoords: &'a [Vector2]) -> Self {
+    pub fn new(vertices: &'a [Vector3], texcoords: &'a [Vector2]) -> Self {
         assert_eq!(
             texcoords.len(),
             vertices.len(),
             "mesh should have one texcoord per vertex",
         );
         Self {
-            triangle_count,
             vertices,
             texcoords,
             texcoords2: None,
@@ -1231,8 +1224,8 @@ impl<'a> MeshBuilder<'a> {
             "indices() should be called no more than once on the same MeshBuilder",
         );
         assert_eq!(
-            indices.len(),
-            self.triangle_count * 3,
+            indices.len() % 3,
+            0,
             "mesh with indices should have 3 for each triangle",
         );
         self.indices = Some(indices);
@@ -1241,9 +1234,20 @@ impl<'a> MeshBuilder<'a> {
 
     /// Complete and upload the [`Mesh`].
     pub fn build(&self, _thread: &RaylibThread) -> Result<Mesh, AllocationError> {
+        let triangle_count = match self.indices {
+            Some(indices) => indices.len(),
+            None => {
+                assert_eq!(
+                    self.vertices.len() % 3,
+                    0,
+                    "mesh without indices should have 3 vertices for each triangle"
+                );
+                self.vertices.len()
+            }
+        } / 3;
         let raw_mesh = ffi::Mesh {
             vertexCount: self.vertices.len().try_into().unwrap(),
-            triangleCount: self.triangle_count.try_into().unwrap(),
+            triangleCount: triangle_count.try_into().unwrap(),
             vertices: slice_to_rl_ptr(Some(self.vertices))?,
             texcoords: slice_to_rl_ptr(Some(self.texcoords))?,
             texcoords2: slice_to_rl_ptr(self.texcoords2)?,

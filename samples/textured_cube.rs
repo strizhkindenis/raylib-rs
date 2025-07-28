@@ -13,7 +13,6 @@ fn tilemap_pos_to_uv(x: usize, y: usize) -> Vector2 {
 }
 
 fn gen_block_mesh(thread: &RaylibThread) -> Mesh {
-    let triangle_count = 6 * 2; // each face has 2 triangles
     let faces = [
         // front
         ([-0.5, -0.5, 0.5], [0.0, 0.0, 1.0], [1, 1]),
@@ -70,7 +69,7 @@ fn gen_block_mesh(thread: &RaylibThread) -> Mesh {
         .iter()
         .map(|(_, _, u)| tilemap_pos_to_uv(u[0], u[1]))
         .collect::<Vec<_>>();
-    Mesh::gen_mesh(triangle_count, &vertices, &texcoords)
+    Mesh::gen_mesh(&vertices, &texcoords)
         .normals(&normals)
         .build(thread)
         .unwrap()
