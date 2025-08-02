@@ -49,6 +49,14 @@ pub enum AllocationError {
 }
 
 #[derive(Error, Debug)]
+pub enum GenMeshError {
+    #[error("provided mesh data does not correspond to a valid mesh:\n  {info}")]
+    InvalidMesh { info: String },
+    #[error("could not allocate memory for the mesh data")]
+    Allocation(#[from] AllocationError),
+}
+
+#[derive(Error, Debug)]
 pub enum CompressionError {
     #[error("could not compress data")]
     CompressionFailed,
@@ -84,7 +92,9 @@ pub enum LoadMaterialError {
 
 #[derive(Error, Debug)]
 pub enum LoadFontError {
-    #[error("error loading font; check if the file exists and if it's the right type\npath: {path:?}")]
+    #[error(
+        "error loading font; check if the file exists and if it's the right type\npath: {path:?}"
+    )]
     LoadFromFileFailed { path: String },
     #[error("error loading font from image")]
     LoadFromImageFailed,

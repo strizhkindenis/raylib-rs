@@ -12,7 +12,8 @@ use crate::ffi::Color;
 use crate::{
     consts,
     error::{
-        AllocationError, LoadMaterialError, LoadModelAnimError, LoadModelError, SetMaterialError,
+        AllocationError, GenMeshError, LoadMaterialError, LoadModelAnimError, LoadModelError,
+        SetMaterialError,
     },
     ffi,
 };
@@ -1126,11 +1127,6 @@ impl<'a> MeshBuilder<'a> {
     ///
     /// NOTE: `texcoords` should have the same number of elements as `vertices`.
     pub fn new(vertices: &'a [Vector3], texcoords: &'a [Vector2]) -> Self {
-        assert_eq!(
-            texcoords.len(),
-            vertices.len(),
-            "mesh should have one texcoord per vertex",
-        );
         Self {
             vertices,
             texcoords,
@@ -1151,11 +1147,6 @@ impl<'a> MeshBuilder<'a> {
             self.texcoords2.is_none(),
             "texcoords2() should be called no more than once on the same MeshBuilder",
         );
-        assert_eq!(
-            texcoords2.len(),
-            self.vertices.len(),
-            "mesh with texcoords2 should have one per vertex",
-        );
         self.texcoords2 = Some(texcoords2);
         self
     }
@@ -1168,11 +1159,6 @@ impl<'a> MeshBuilder<'a> {
         assert!(
             self.normals.is_none(),
             "normals() should be called no more than once on the same MeshBuilder",
-        );
-        assert_eq!(
-            normals.len(),
-            self.vertices.len(),
-            "mesh with normals should have one per vertex",
         );
         self.normals = Some(normals);
         self
@@ -1187,11 +1173,6 @@ impl<'a> MeshBuilder<'a> {
             self.tangents.is_none(),
             "tangents() should be called no more than once on the same MeshBuilder",
         );
-        assert_eq!(
-            tangents.len(),
-            self.vertices.len(),
-            "mesh with tangents should have one per vertex",
-        );
         self.tangents = Some(tangents);
         self
     }
@@ -1204,11 +1185,6 @@ impl<'a> MeshBuilder<'a> {
         assert!(
             self.colors.is_none(),
             "colors() should be called no more than once on the same MeshBuilder",
-        );
-        assert_eq!(
-            colors.len(),
-            self.vertices.len(),
-            "mesh with colors should have one per vertex",
         );
         self.colors = Some(colors);
         self
@@ -1223,30 +1199,77 @@ impl<'a> MeshBuilder<'a> {
             self.indices.is_none(),
             "indices() should be called no more than once on the same MeshBuilder",
         );
-        assert_eq!(
-            indices.len() % 3,
-            0,
-            "mesh with indices should have 3 for each triangle",
-        );
         self.indices = Some(indices);
         self
     }
 
+    fn check_mesh(&self) -> Result<(usize, usize), GenMeshError> {
+        let triangle_vertex_count = self
+            .indices
+            .map(|indices| indices.len())
+            .unwrap_or(self.vertices.len());
+        if triangle_vertex_count % 3 != 0 {
+            return Err(GenMeshError::InvalidMesh {
+                info: "mesh should have 3 indices/vertices for each triangle".into(),
+            });
+        }
+        if self
+            .indices
+            .iter()
+            .copied()
+            .flatten()
+            .max()
+            .is_some_and(|&m| usize::from(m) >= self.vertices.len())
+        {
+            return Err(GenMeshError::InvalidMesh {
+                info: "indices should be within the number of vertices".into(),
+            });
+        }
+        if self.texcoords.len() != self.vertices.len() {
+            return Err(GenMeshError::InvalidMesh {
+                info: "mesh should have one texcoord per vertex".into(),
+            });
+        }
+        if self
+            .texcoords2
+            .is_some_and(|texoords2| texoords2.len() != self.vertices.len())
+        {
+            return Err(GenMeshError::InvalidMesh {
+                info: "mesh with texcoords2 should have one per vertex".into(),
+            });
+        }
+        if self
+            .normals
+            .is_some_and(|normals| normals.len() != self.vertices.len())
+        {
+            return Err(GenMeshError::InvalidMesh {
+                info: "mesh with normals should have one per vertex".into(),
+            });
+        };
+        if self
+            .tangents
+            .is_some_and(|tangents| tangents.len() != self.vertices.len())
+        {
+            return Err(GenMeshError::InvalidMesh {
+                info: "mesh with tangents should have one per vertex".into(),
+            });
+        }
+        if self
+            .colors
+            .is_some_and(|colors| colors.len() != self.vertices.len())
+        {
+            return Err(GenMeshError::InvalidMesh {
+                info: "mesh with colors should have one per vertex".into(),
+            });
+        }
+        Ok((self.vertices.len(), triangle_vertex_count / 3))
+    }
+
     /// Complete and upload the [`Mesh`].
-    pub fn build(&self, _thread: &RaylibThread) -> Result<Mesh, AllocationError> {
-        let triangle_count = match self.indices {
-            Some(indices) => indices.len(),
-            None => {
-                assert_eq!(
-                    self.vertices.len() % 3,
-                    0,
-                    "mesh without indices should have 3 vertices for each triangle"
-                );
-                self.vertices.len()
-            }
-        } / 3;
+    pub fn build(&self, _thread: &RaylibThread) -> Result<Mesh, GenMeshError> {
+        let (vertex_count, triangle_count) = self.check_mesh()?;
         let raw_mesh = ffi::Mesh {
-            vertexCount: self.vertices.len().try_into().unwrap(),
+            vertexCount: vertex_count.try_into().unwrap(),
             triangleCount: triangle_count.try_into().unwrap(),
             vertices: slice_to_rl_ptr(Some(self.vertices))?,
             texcoords: slice_to_rl_ptr(Some(self.texcoords))?,
