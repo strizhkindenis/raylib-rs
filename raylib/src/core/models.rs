@@ -12,8 +12,8 @@ use crate::ffi::Color;
 use crate::{
     consts,
     error::{
-        AllocationError, GenMeshError, LoadMaterialError, LoadModelAnimError, LoadModelError,
-        SetMaterialError,
+        AllocationError, GenMeshError, InvalidMeshError, LoadMaterialError, LoadModelAnimError,
+        LoadModelError, SetMaterialError,
     },
     ffi,
 };
@@ -1203,66 +1203,36 @@ impl<'a> MeshBuilder<'a> {
         self
     }
 
-    fn check_mesh(&self) -> Result<(usize, usize), GenMeshError> {
-        let triangle_vertex_count = self
-            .indices
-            .map(|indices| indices.len())
-            .unwrap_or(self.vertices.len());
-        if triangle_vertex_count % 3 != 0 {
-            return Err(GenMeshError::InvalidMesh {
-                info: "mesh should have 3 indices/vertices for each triangle".into(),
-            });
+    fn check_mesh(&self) -> Result<(usize, usize), InvalidMeshError> {
+        let vertex_count = self.vertices.len();
+        let triangle_vertex_count = self.indices.map_or(vertex_count, <[_]>::len);
+        let triangle_count = triangle_vertex_count / 3;
+        let triangle_count_rem = triangle_vertex_count % 3;
+        if triangle_count_rem != 0 {
+            Err(InvalidMeshError::TrianglePointMiscount)
+        } else if self.texcoords.len() != vertex_count {
+            Err(InvalidMeshError::TexcoordsMiscount)
+        } else if self.texcoords2.is_some_and(|x| x.len() != vertex_count) {
+            Err(InvalidMeshError::Texcoords2Miscount)
+        } else if self.normals.is_some_and(|x| x.len() != vertex_count) {
+            Err(InvalidMeshError::NormalsMiscount)
+        } else if self.tangents.is_some_and(|x| x.len() != vertex_count) {
+            Err(InvalidMeshError::TangentsMiscount)
+        } else if self.colors.is_some_and(|x| x.len() != vertex_count) {
+            Err(InvalidMeshError::ColorsMiscount)
+        } else if match self.indices {
+            Some(indices) => {
+                let vertex_count = vertex_count
+                    .try_into()
+                    .map_err(InvalidMeshError::VertexUnindexible)?;
+                indices.iter().any(|&x| x >= vertex_count)
+            }
+            None => false,
+        } {
+            Err(InvalidMeshError::IndexOutOfBounds)
+        } else {
+            Ok((vertex_count, triangle_count))
         }
-        if self
-            .indices
-            .iter()
-            .copied()
-            .flatten()
-            .max()
-            .is_some_and(|&m| usize::from(m) >= self.vertices.len())
-        {
-            return Err(GenMeshError::InvalidMesh {
-                info: "indices should be within the number of vertices".into(),
-            });
-        }
-        if self.texcoords.len() != self.vertices.len() {
-            return Err(GenMeshError::InvalidMesh {
-                info: "mesh should have one texcoord per vertex".into(),
-            });
-        }
-        if self
-            .texcoords2
-            .is_some_and(|texoords2| texoords2.len() != self.vertices.len())
-        {
-            return Err(GenMeshError::InvalidMesh {
-                info: "mesh with texcoords2 should have one per vertex".into(),
-            });
-        }
-        if self
-            .normals
-            .is_some_and(|normals| normals.len() != self.vertices.len())
-        {
-            return Err(GenMeshError::InvalidMesh {
-                info: "mesh with normals should have one per vertex".into(),
-            });
-        };
-        if self
-            .tangents
-            .is_some_and(|tangents| tangents.len() != self.vertices.len())
-        {
-            return Err(GenMeshError::InvalidMesh {
-                info: "mesh with tangents should have one per vertex".into(),
-            });
-        }
-        if self
-            .colors
-            .is_some_and(|colors| colors.len() != self.vertices.len())
-        {
-            return Err(GenMeshError::InvalidMesh {
-                info: "mesh with colors should have one per vertex".into(),
-            });
-        }
-        Ok((self.vertices.len(), triangle_vertex_count / 3))
     }
 
     /// Complete and upload the [`Mesh`].

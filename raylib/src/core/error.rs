@@ -49,9 +49,29 @@ pub enum AllocationError {
 }
 
 #[derive(Error, Debug)]
+pub enum InvalidMeshError {
+    #[error("mesh should have 3 indices/vertices for each triangle")]
+    TrianglePointMiscount,
+    #[error("indices should be within the number of vertices")]
+    IndexOutOfBounds,
+    #[error("mesh with indices should not exceed u16::MAX vertices")]
+    VertexUnindexible(std::num::TryFromIntError),
+    #[error("mesh should have one texcoord per vertex")]
+    TexcoordsMiscount,
+    #[error("mesh with texcoords2 should have one per vertex")]
+    Texcoords2Miscount,
+    #[error("mesh with normals should have one per vertex")]
+    NormalsMiscount,
+    #[error("mesh with tangents should have one per vertex")]
+    TangentsMiscount,
+    #[error("mesh with colors should have one per vertex")]
+    ColorsMiscount,
+}
+
+#[derive(Error, Debug)]
 pub enum GenMeshError {
-    #[error("provided mesh data does not correspond to a valid mesh:\n  {info}")]
-    InvalidMesh { info: String },
+    #[error("provided mesh data does not correspond to a valid mesh")]
+    InvalidMesh(#[from] InvalidMeshError),
     #[error("could not allocate memory for the mesh data")]
     Allocation(#[from] AllocationError),
 }
