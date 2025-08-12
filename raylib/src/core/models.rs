@@ -1047,7 +1047,7 @@ impl Mesh {
     /// ```
     /// # use raylib::prelude::*;
     /// # let (mut rl, thread) = init().build();
-    /// let mesh = Mesh::gen_mesh(1, &[
+    /// let mesh = Mesh::gen_mesh(&[
     ///     Vector3::new(0.0, 0.0, 0.0),
     ///     Vector3::new(1.0, 0.0, 0.0),
     ///     Vector3::new(1.0, 0.0, 1.0),
