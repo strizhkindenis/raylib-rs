@@ -424,6 +424,7 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
             return &[];
         }
         let vertices_ptr = self.as_ref().vertices as *const Vector3;
+        assert!(!vertices_ptr.is_null()); //TODO: there is an error for this, needs discussion
         unsafe { std::slice::from_raw_parts(vertices_ptr, self.as_ref().vertexCount as usize) }
     }
     /// Vertex position (XYZ - 3 components per vertex) (shader-location = 0)
@@ -438,7 +439,6 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
         assert!(!vertices_ptr.is_null());
         unsafe { std::slice::from_raw_parts_mut(vertices_ptr, self.as_ref().vertexCount as usize) }
     }
-    /// TODO: figure out what shader-location is and update texcoords(2) docs
     /// Texture Coordinates (UV (or ST) - 2 components per vertex) (shader-location = 1)
     #[inline]
     fn texcoords(&self) -> Option<&[Vector2]> {
@@ -455,6 +455,7 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
             std::slice::from_raw_parts_mut(texcoords, self.as_ref().vertexCount as usize)
         })
     }
+    /// Texture Coordinates 2 (UV (or ST) - 2 components per vertex) (shader-location = 2)
     #[inline]
     fn texcoords2(&self) -> Option<&[Vector2]> {
         let texcoords2 = self.as_ref().texcoords2 as *const Vector2;
@@ -462,6 +463,7 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
             std::slice::from_raw_parts(texcoords2, self.as_ref().vertexCount as usize)
         })
     }
+    /// Texture Coordinates 2 (UV (or ST) - 2 components per vertex) (shader-location = 2)
     #[inline]
     fn texcoords2_mut(&mut self) -> Option<&mut [Vector2]> {
         let texcoords2 = self.as_mut().texcoords2 as *mut Vector2;
@@ -469,7 +471,7 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
             std::slice::from_raw_parts_mut(texcoords2, self.as_ref().vertexCount as usize)
         })
     }
-    /// Vertex normals (XYZ - 3 components per vertex) (shader-location = 2)
+    /// Vertex normals (XYZ - 3 components per vertex) (shader-location = 3)
     #[inline]
     fn normals(&self) -> Option<&[Vector3]> {
         let normals = self.as_ref().normals as *const Vector3;
@@ -477,7 +479,7 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
             std::slice::from_raw_parts(normals, self.as_ref().vertexCount as usize)
         })
     }
-    /// Vertex normals (XYZ - 3 components per vertex) (shader-location = 2)
+    /// Vertex normals (XYZ - 3 components per vertex) (shader-location = 3)
     #[inline]
     fn normals_mut(&mut self) -> Option<&mut [Vector3]> {
         let normals = self.as_mut().normals as *mut Vector3;
@@ -559,11 +561,7 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
 
     #[inline]
     fn triangle_count(&self) -> usize {
-        if let Some(indices) = self.indices() {
-            indices.len() / 3
-        } else {
-            self.vertices().len() / 3
-        }
+        self.as_ref().triangleCount as usize
     }
     /// Generate polygonal mesh
     #[inline]
