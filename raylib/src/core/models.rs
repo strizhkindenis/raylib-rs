@@ -455,6 +455,18 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
             std::slice::from_raw_parts_mut(texcoords, self.as_ref().vertexCount as usize)
         })
     }
+    fn ensure_texcoords(&mut self) -> Result<&mut [Vector2], AllocationError> {
+        if self.as_ref().texcoords.is_null() {
+            let vertex_count = self.as_ref().vertexCount as usize;
+            let default_texcoords =
+                slice_to_rl_ptr::<Vector2, Vector2>(Some(&vec![Vector2::default(); vertex_count]))?;
+            self.as_mut().texcoords = default_texcoords.cast();
+        }
+        unsafe {
+            self.upload(false);
+        }
+        Ok(self.texcoords_mut().expect("texcoords must be set"))
+    }
     /// Texture Coordinates 2 (UV (or ST) - 2 components per vertex) (shader-location = 2)
     #[inline]
     fn texcoords2(&self) -> Option<&[Vector2]> {
@@ -518,6 +530,15 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
         (!colors.is_null()).then(|| unsafe {
             std::slice::from_raw_parts_mut(colors, self.as_ref().vertexCount as usize)
         })
+    }
+    fn ensure_colors(&mut self) -> Result<&mut [Color], AllocationError> {
+        if self.as_ref().colors.is_null() {
+            let vertex_count = self.as_ref().vertexCount as usize;
+            let default_colors =
+                slice_to_rl_ptr::<Color, Color>(Some(&vec![Color::WHITE; vertex_count]))?;
+            self.as_mut().colors = default_colors.cast();
+        }
+        Ok(self.colors_mut().expect("colors must be set"))
     }
     /// Vertex indices (in case vertex data comes indexed)
     #[inline]
@@ -1407,7 +1428,7 @@ impl Mesh {
     /// ```
     /// # use raylib::prelude::*;
     /// # let (mut rl, thread) = init().build();
-    /// let mesh = Mesh::gen_mesh(&[
+    /// let mesh = Mesh::init_mesh(&[
     ///     Vector3::new(0.0, 0.0, 0.0),
     ///     Vector3::new(1.0, 0.0, 0.0),
     ///     Vector3::new(1.0, 0.0, 1.0),
@@ -1430,7 +1451,7 @@ impl Mesh {
     /// .build(&thread);
     /// ```
     #[inline]
-    pub fn gen_mesh<'a>(vertices: &'a [Vector3]) -> MeshBuilder<'a> {
+    pub fn init_mesh<'a>(vertices: &'a [Vector3]) -> MeshBuilder<'a> {
         MeshBuilder::new(vertices)
     }
 }
