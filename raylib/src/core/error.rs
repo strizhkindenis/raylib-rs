@@ -34,6 +34,18 @@ pub enum LoadSoundError {
     MusicNull,
 }
 
+/// Errors that can occur when pushing new audio data into a `Sound` or `AudioStream`.
+/// **Notes** (iann): if raylib upstream discussion introduces any of these checks, we might simplify these to avoid any redundancy i think
+/// 1. `SampleSizeMismatch` is raylib-rs only, raylib does not do sampleSize matching checks.
+/// 2. `TooManyFrames` comes from the WARNING behavior in raylib `UpdateAudioStreamInLockedState`: https://github.com/raysan5/raylib/blob/master/src/raudio.c#L2662
+#[derive(Error, Debug)]
+pub enum UpdateAudioStreamError {
+    #[error("update data format must match sound: expected {expected} bits, got {provided} bits")]
+    SampleSizeMismatch { expected: usize, provided: usize },
+    #[error("Attempting to write too many frames to buffer: provided {provided}, max {max}")]
+    TooManyFrames { max: usize, provided: usize },
+}
+
 #[derive(Error, Debug)]
 pub enum AllocationError {
     /// [`MemAlloc`](crate::ffi::MemAlloc) returned null.
@@ -51,21 +63,29 @@ pub enum AllocationError {
 #[derive(Error, Debug)]
 pub enum InvalidMeshError {
     #[error("mesh should have 3 indices/vertices for each triangle")]
-    TrianglePointMiscount,
+    TriangleNotMultipleOf3,
     #[error("indices should be within the number of vertices")]
     IndexOutOfBounds,
     #[error("mesh with indices should not exceed u16::MAX vertices")]
-    VertexUnindexible(std::num::TryFromIntError),
-    #[error("mesh should have one texcoord per vertex")]
-    TexcoordsMiscount,
-    #[error("mesh with texcoords2 should have one per vertex")]
-    Texcoords2Miscount,
-    #[error("mesh with normals should have one per vertex")]
-    NormalsMiscount,
-    #[error("mesh with tangents should have one per vertex")]
-    TangentsMiscount,
-    #[error("mesh with colors should have one per vertex")]
-    ColorsMiscount,
+    VertexCountOverflow(#[from] std::num::TryFromIntError),
+    
+    #[error("number of texcoords should match vertexCount")]
+    TexcoordCountMismatch,
+    #[error("number of texcoords2 should match vertexCount")]
+    Texcoord2CountMismatch,
+    #[error("number of normals should match vertexCount")]
+    NormalCountMismatch,
+    #[error("number of tangents should match vertexCount")]
+    TangentCountMismatch,
+    #[error("number of colors should match vertexCount")]
+    ColorCountMismatch,
+
+    #[error("vertexCount or triangleCount is negative")]
+    NegativeCount,
+    #[error("mesh has vertexCount > 0 but vertices pointer is null")]
+    VerticesPointerNull,
+    #[error("triangleCount is inconsistent with vertices/indices")]
+    TriangleCountInconsistent,
 }
 
 #[derive(Error, Debug)]
@@ -80,6 +100,14 @@ pub enum GenMeshError {
 pub enum CompressionError {
     #[error("could not compress data")]
     CompressionFailed,
+}
+
+#[derive(Error, Debug)]
+pub enum Base64Error {
+    #[error("could not decode base64 data")]
+    DecodeFailed,
+    #[error("could not encode base64 data")]
+    EncodeFailed,
 }
 
 #[derive(Error, Debug)]
